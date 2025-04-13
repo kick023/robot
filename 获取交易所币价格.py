@@ -1,43 +1,52 @@
-import requests
+from binance.client import Client as BinanceClient
+from okx.MarketData import MarketAPI
+
+# 初始化客户端
+binance_client = BinanceClient()
+okx_client = MarketAPI(
+    flag="0",        # 实盘模式
+    domain="https://www.okx.com",
+    # 即使不需要交易功能，SDK页要求传入占位密钥
+    api_key="",      # 留空
+    api_secret_key="",  # 留空
+    passphrase=""
+)
 
 def get_binance_prices():
-    """获取币安交易所买一卖一价格"""
+    """使用币安官方SDK获取价格"""
     try:
-        url = "https://api.binance.com/api/v3/ticker/bookTicker?symbol=SOLUSDT"
-        response = requests.get(url)
-        response.raise_for_status()
-        data = response.json()
-        return float(data['bidPrice']), float(data['askPrice'])
+        ticker = binance_client.get_orderbook_ticker(symbol='SOLUSDT')
+        return float(ticker['bidPrice']), float(ticker['askPrice'])
     except Exception as e:
         print(f"币安价格获取失败: {e}")
         return None, None
 
 def get_okx_prices():
-    """获取OKX交易所买一卖一价格"""
+    """使用OKX官方SDK获取价格"""
     try:
-        url = "https://www.okx.com/api/v5/market/books?instId=SOL-USDT&sz=1"
-        response = requests.get(url)
-        response.raise_for_status()
-        data = response.json()
-        if data['code'] == "0":
-            bid = float(data['data'][0]['bids'][0][0])
-            ask = float(data['data'][0]['asks'][0][0])
-            return bid, ask
-        print(f"OKX API错误: {data.get('msg')}")
-        return None, None
+        response = okx_client.get_orderbook(instId="SOL-USDT", sz=1)
+        if response["code"] == "0":
+            # 数据结构验证
+            bids = response["data"][0]["bids"]
+            asks = response["data"][0]["asks"]
+            if len(bids) > 0 and len(asks) > 0:
+                return float(bids[0][0]), float(asks[0][0])
+            else:
+                print("OKX订单簿数据为空")
+                return None, None
+        else:
+            print(f"OKX API错误: {response['msg']} (错误码: {response['code']})")
+            return None, None
     except Exception as e:
-        print(f"OKX价格获取失败: {e}")
+        print(f"OKX价格获取失败: {str(e)}")
         return None, None
 
 def get_binance_orderbook():
-    """获取币安交易所前10档挂单"""
+    """获取币安挂单数据"""
     try:
-        url = "https://api.binance.com/api/v3/depth?symbol=SOLUSDT&limit=10"
-        response = requests.get(url)
-        response.raise_for_status()
-        data = response.json()
-        bids = [[float(p), float(q)] for p, q in data['bids']]
-        asks = [[float(p), float(q)] for p, q in data['asks']]
+        depth = binance_client.get_order_book(symbol='SOLUSDT', limit=10)
+        bids = [[float(p), float(q)] for p, q in depth['bids']]
+        asks = [[float(p), float(q)] for p, q in depth['asks']]
         return bids, asks
     except Exception as e:
         print(f"币安挂单获取失败: {e}")
